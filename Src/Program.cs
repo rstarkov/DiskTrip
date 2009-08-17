@@ -34,7 +34,7 @@ namespace DiskTrip
             cmd.Parse(args);
             cmd.ErrorIfPositionalArgsCountNot(0);
             if (cmd.OptSwitch("read-only") && cmd.OptSwitch("write-only"))
-                cmd.Error("The options --read-only and --write-only are mutually exlusive - it is an error to specify both.");
+                cmd.Error("The options --read-only and --write-only are mutually exlusive. Specify only one of the two and try again.");
             cmd.ProcessHelpAndErrors();
 
             Filename = cmd.OptValue("filename");
