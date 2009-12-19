@@ -1,0 +1,32 @@
+<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
+         DefaultTargets="Version;Build" ToolsVersion="3.5">
+  <Import Project="..\common\Build\CommonImports.proj"/>
+  <PropertyGroup>
+    <ProjectName>DiskTrip</ProjectName>
+    <BuildsPath Condition="'$(BuildsPath)'==''">..\..\builds</BuildsPath>
+  </PropertyGroup>
+
+
+  <Target Name="Version">
+    <ConvertToAbsolutePath Paths="Program.cs"><Output TaskParameter="AbsolutePaths" PropertyName="AssemblyInfoFile"/></ConvertToAbsolutePath>
+    <MSBuild Projects="..\common\Build\SetAssemblyVersion.proj" Properties="AssemblyInfoFile=$(AssemblyInfoFile)"/>
+  </Target>
+
+
+  <Target Name="Build" DependsOnTargets="BuildDebug;BuildRelease">
+  </Target>
+
+
+  <Target Name="BuildDebug">
+    <MSBuild Projects="Build$(ProjectName)Single.proj"
+             Properties="Configuration=Debug;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath)"/>
+  </Target>
+
+
+  <Target Name="BuildRelease">
+    <MSBuild Projects="Build$(ProjectName)Single.proj"
+             Properties="Configuration=Release;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath)"/>
+  </Target>
+
+
+</Project>
