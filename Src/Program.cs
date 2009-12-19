@@ -15,16 +15,16 @@ using RT.Util.CommandLine;
 
 namespace DiskTrip
 {
-    class CommandLineParams
+    class CommandLineParams : ICommandLineValidatable
     {
 #pragma warning disable 649 // Field is never assigned to, and will always have its default value null
         [Option("-f"), Option("--filename"), IsMandatory]
-        [DocumentationLiteral("The name of the file to be written to and read from")]
+        [DocumentationLiteral("The name of the file to be written to and read from.")]
         public string FileName;
 
         [Option("-s"), Option("--size")]
         [DocumentationLiteral("The size of the file to create, in MB (megabytes). Defaults to 1000. Ignored in --read-only mode.")]
-        public string Size = "1000";
+        public int Size = 1000;
 
         [Option("-wo"), Option("--write-only")]
         [DocumentationLiteral("If specified, only the write phase of the test will be executed. The resulting file will not be deleted.")]
@@ -36,13 +36,19 @@ namespace DiskTrip
 
         [Option("-sd"), Option("--seed")]
         [DocumentationLiteral("A seed to be used for random data generation. Defaults to 0.")]
-        public string Seed = "0";
+        public int Seed = 0;
 #pragma warning restore 649 // Field is never assigned to, and will always have its default value null
+
+        public string Validate()
+        {
+            if (ReadOnly && WriteOnly)
+                return "The options --read-only and --write-only are mutually exlusive. Specify only one of the two and try again.";
+            return null;
+        }
     }
 
     static class Program
     {
-        static int Seed, Size;
         static ConsoleLogger Log;
         static CommandLineParams Params;
 
@@ -51,13 +57,10 @@ namespace DiskTrip
             try
             {
                 var parser = new CommandLineParser<CommandLineParams>();
+#if DEBUG
+                parser.PostBuildStep();
+#endif
                 Params = parser.Parse(args);
-                if (Params.WriteOnly && Params.ReadOnly)
-                    parser.ValidationError("The options --read-only and --write-only are mutually exlusive. Specify only one of the two and try again.");
-                if (!int.TryParse(Params.Seed, out Seed))
-                    parser.ValidationError("The value of the --seed parameter must be an integer.");
-                if (!int.TryParse(Params.Size, out Size))
-                    parser.ValidationError("The value of the --size parameter must be an integer.");
             }
             catch (CommandLineParseException e)
             {
@@ -65,7 +68,7 @@ namespace DiskTrip
                 return 1;
             }
 
-            long writelength = Size * 1024 * 1024;
+            long writelength = Params.Size * 1024 * 1024;
 
             Log = new ConsoleLogger();
             Log.ConfigureVerbosity("1");
@@ -95,7 +98,7 @@ namespace DiskTrip
         {
             Log.Info("Writing file...");
             FileStream stream = new FileStream(Params.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
-            Random rnd = new Random(Seed);
+            Random rnd = new Random(Params.Seed);
             try
             {
                 byte[] data = new byte[32768];
@@ -130,7 +133,7 @@ namespace DiskTrip
         {
             Log.Info("Reading file...");
             FileStream stream = new FileStream(Params.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-            Random rnd = new Random(Seed);
+            Random rnd = new Random(Params.Seed);
             try
             {
                 long length = stream.Length;
