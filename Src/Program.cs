@@ -2,9 +2,9 @@
 using System.IO;
 using System.Reflection;
 using RT.Util;
+using RT.Util.CommandLine;
 using RT.Util.ExtensionMethods;
 using RT.Util.Streams;
-using RT.Util.CommandLine;
 
 [assembly: AssemblyTitle("DiskTrip")]
 [assembly: AssemblyCompany("CuteBits")]
@@ -24,7 +24,7 @@ namespace DiskTrip
 
         [Option("-s"), Option("--size")]
         [DocumentationLiteral("The size of the file to create, in MB (megabytes). Defaults to 1000. Ignored in --read-only mode.")]
-        public int Size = 1000;
+        public long Size = 1000;
 
         [Option("-wo"), Option("--write-only")]
         [DocumentationLiteral("If specified, only the write phase of the test will be executed. The resulting file will not be deleted.")]
