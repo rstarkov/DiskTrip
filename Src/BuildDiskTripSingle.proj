@@ -34,13 +34,19 @@
 
   <Target Name="Merge" DependsOnTargets="Build">
     <ItemGroup>
-      <UnmergedFiles Include="$(OutputPathRaw)\**"
-                     Exclude="$(OutputPathRaw)\DiskTrip.*; $(OutputPathRaw)\RT.Util.*"/>
+      <MergeFilesAndEtc Include="$(OutputPathRaw)\DiskTrip.*"/>
+      <MergeFilesAndEtc Include="$(OutputPathRaw)\RT.Util.*"/>
+    </ItemGroup>
+
+    <RegexMatch Input="@(MergeFilesAndEtc)" Expression="(\.exe$)|(\.dll$)">
+      <Output TaskParameter="Output" ItemName="MergeFiles"/>
+    </RegexMatch>
+    <ItemGroup>
+      <UnmergedFiles Include="$(OutputPathRaw)\**" Exclude="@(MergeFilesAndEtc)"/>
     </ItemGroup>
     <Copy SourceFiles="@(UnmergedFiles)" DestinationFolder="$(OutputPathMerged)\%(RecursiveDir)"/>
     <MakeDir Directories="$(OutputPathMerged)"/>
-    <Exec Command='"$(ILMerge)" "/out:$(OutputPathMerged)\DiskTrip.exe" "$(OutputPathRaw)\DiskTrip.exe" "$(OutputPathRaw)\RT.Util.dll"'/>
+    <Exec Command='"$(ILMerge)" "/out:$(OutputPathMerged)\$(ProjectName).exe" "@(MergeFiles, &apos;" "&apos;)"'/>
   </Target>
-
 
 </Project>
