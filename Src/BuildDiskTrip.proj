@@ -8,8 +8,9 @@
 
 
   <Target Name="Version">
-    <ConvertToAbsolutePath Paths="Program.cs"><Output TaskParameter="AbsolutePaths" PropertyName="AssemblyInfoFile"/></ConvertToAbsolutePath>
-    <MSBuild Projects="..\common\Build\SetAssemblyVersion.proj" Properties="AssemblyInfoFile=$(AssemblyInfoFile)"/>
+    <AssemblyVersion AssemblyFile="Program.cs" VersionTemplate="?.?.$(BuildId).$(ChangeId)">
+      <Output TaskParameter="Version" PropertyName="Version"/>
+    </AssemblyVersion>
   </Target>
 
 
@@ -19,13 +20,13 @@
 
   <Target Name="BuildDebug">
     <MSBuild Projects="Build$(ProjectName)Single.proj"
-             Properties="Configuration=Debug;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath)"/>
+             Properties="Configuration=Debug;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath);Version=$(Version)"/>
   </Target>
 
 
   <Target Name="BuildRelease">
     <MSBuild Projects="Build$(ProjectName)Single.proj"
-             Properties="Configuration=Release;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath)"/>
+             Properties="Configuration=Release;ProjectName=$(ProjectName);BuildsPath=$(BuildsPath);Version=$(Version)"/>
   </Target>
 
 
