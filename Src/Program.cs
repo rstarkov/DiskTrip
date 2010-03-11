@@ -45,6 +45,13 @@ namespace DiskTrip
                 return "The options --read-only and --write-only are mutually exlusive. Specify only one of the two and try again.";
             return null;
         }
+
+#if DEBUG
+        private static void PostBuildCheck(IPostBuildReporter rep)
+        {
+            CommandLineParser<CommandLineParams>.PostBuildStep(rep, null);
+        }
+#endif
     }
 
     static class Program
@@ -58,8 +65,10 @@ namespace DiskTrip
             {
                 var parser = new CommandLineParser<CommandLineParams>();
 #if DEBUG
-                parser.PostBuildStep();
+                if (args.Length == 2 && args[0] == "--post-build-check")
+                    return Ut.RunPostBuildChecks(args.Length==2?args[1]:"", typeof(Program).Assembly);
 #endif
+
                 Params = parser.Parse(args);
             }
             catch (CommandLineParseException e)
@@ -116,11 +125,11 @@ namespace DiskTrip
                     {
                         progress = 0;
                         remainingAtMsg = remaining;
-                        Log.Info("  written {0} MB, {1:0.00}%", (length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0);
+                        Log.Info("  written {0} MB, {1:0.00}%".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0));
                     }
                 }
                 if (remainingAtMsg != 0)
-                    Log.Info("  written {0} MB, {1:0.00}%", length / (1024 * 1024), 100.0);
+                    Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1024 * 1024), 100.0));
                 Log.Info("");
             }
             finally
@@ -164,11 +173,11 @@ namespace DiskTrip
                     {
                         progress = 0;
                         remainingAtMsg = remaining;
-                        Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}", (length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0, errors, signature.CRC);
+                        Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0, errors, signature.CRC));
                     }
                 }
                 if (remainingAtMsg != 0)
-                    Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}", length / (1024 * 1024), 100.0, errors, signature.CRC);
+                    Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1024 * 1024), 100.0, errors, signature.CRC));
                 Log.Info("");
                 return errors;
             }

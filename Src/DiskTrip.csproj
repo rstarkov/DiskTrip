@@ -59,4 +59,7 @@
   <Target Name="AfterBuild">
   </Target>
   -->
+  <PropertyGroup>
+    <PostBuildEvent Condition=" '$(Configuration)|$(Platform)' == 'Debug|AnyCPU' ">"$(TargetPath)" --post-build-check "$(SolutionDir)."</PostBuildEvent>
+  </PropertyGroup>
 </Project>
