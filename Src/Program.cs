@@ -9,12 +9,13 @@ using RT.Util.Streams;
 [assembly: AssemblyTitle("DiskTrip")]
 [assembly: AssemblyCompany("CuteBits")]
 [assembly: AssemblyProduct("DiskTrip")]
-[assembly: AssemblyCopyright("Copyright © CuteBits 2008-2009")]
-[assembly: AssemblyVersion("1.0.52009.51219")]
-[assembly: AssemblyFileVersion("1.0.52009.51219")]
+[assembly: AssemblyCopyright("Copyright © CuteBits 2008-2010")]
+[assembly: AssemblyVersion("1.0.9999.9999")]
+[assembly: AssemblyFileVersion("1.0.9999.9999")]
 
 namespace DiskTrip
 {
+    [DocumentationLiteral("Reads, writes and verifies large pseudo-random files in order to confirm error-less filesystem read//write operations.")]
     class CommandLineParams : ICommandLineValidatable
     {
 #pragma warning disable 649 // Field is never assigned to, and will always have its default value null
