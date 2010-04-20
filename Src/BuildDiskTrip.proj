@@ -1,6 +1,6 @@
 <!-- Main.BuildScriptKind.ZYXWVUTSRQPONMLKJIHGFEDCBA -->
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"
-         DefaultTargets="Version;Build" ToolsVersion="3.5">
+         DefaultTargets="Version;Build" ToolsVersion="4.0">
   <Import Project="..\common\Build\CommonImports.proj"/>
   <PropertyGroup>
     <ProjectName>DiskTrip</ProjectName>
