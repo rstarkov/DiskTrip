@@ -47,7 +47,7 @@
     </ItemGroup>
     <Copy SourceFiles="@(UnmergedFiles)" DestinationFolder="$(OutputPathMerged)\%(RecursiveDir)"/>
     <MakeDir Directories="$(OutputPathMerged)"/>
-    <Exec Command='"$(ILMerge)" "/out:$(OutputPathMerged)\$(ProjectName).exe" "@(MergeFiles, &apos;" "&apos;)"'/>
+    <Exec Command='$(ILMergeNET4) "/out:$(OutputPathMerged)\$(ProjectName).exe" "@(MergeFiles, &apos;" "&apos;)"'/>
   </Target>
 
 </Project>
