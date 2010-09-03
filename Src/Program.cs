@@ -19,23 +19,23 @@ namespace DiskTrip
     class CommandLineParams : ICommandLineValidatable
     {
 #pragma warning disable 649 // Field is never assigned to, and will always have its default value null
-        [Option("-f"), Option("--filename"), IsMandatory]
+        [Option("-f", "--filename"), IsMandatory]
         [DocumentationLiteral("The name of the file to be written to and read from.")]
         public string FileName;
 
-        [Option("-s"), Option("--size")]
+        [Option("-s", "--size")]
         [DocumentationLiteral("The size of the file to create, in MB (megabytes). Defaults to 1000. Ignored in --read-only mode.")]
         public long Size = 1000;
 
-        [Option("-wo"), Option("--write-only")]
+        [Option("-wo", "--write-only")]
         [DocumentationLiteral("If specified, only the write phase of the test will be executed. The resulting file will not be deleted.")]
         public bool WriteOnly;
 
-        [Option("-ro"), Option("--read-only")]
+        [Option("-ro", "--read-only")]
         [DocumentationLiteral("If specified, only the read phase of the test will be executed. The file will not be deleted.")]
         public bool ReadOnly;
 
-        [Option("-sd"), Option("--seed")]
+        [Option("-sd", "--seed")]
         [DocumentationLiteral("A seed to be used for random data generation. Defaults to 0.")]
         public int Seed = 0;
 #pragma warning restore 649 // Field is never assigned to, and will always have its default value null
