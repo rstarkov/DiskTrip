@@ -64,13 +64,12 @@ namespace DiskTrip
         {
             try
             {
-                var parser = new CommandLineParser<CommandLineParams>();
 #if DEBUG
                 if (args.Length == 2 && args[0] == "--post-build-check")
-                    return Ut.RunPostBuildChecks(args.Length==2?args[1]:"", typeof(Program).Assembly);
+                    return Ut.RunPostBuildChecks(args[1], typeof(Program).Assembly);
 #endif
 
-                Params = parser.Parse(args);
+                Params = CommandLineParser<CommandLineParams>.Parse(args);
             }
             catch (CommandLineParseException e)
             {
