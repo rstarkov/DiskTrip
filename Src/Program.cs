@@ -84,8 +84,7 @@ namespace DiskTrip
 
             if (Params.WriteOnly)
             {
-                WriteRandomFile(writelength);
-                return 0;
+                return WriteRandomFile(writelength) ? 0 : 1;
             }
             else if (Params.ReadOnly)
             {
@@ -94,47 +93,54 @@ namespace DiskTrip
             else
             {
                 int errors = 0;
-                WriteRandomFile(writelength);
+
+                if (!WriteRandomFile(writelength))
+                    return 1;
                 errors += ReadAndVerifyFile();
-                errors += ReadAndVerifyFile();
+                if (errors != 0)
+                    errors += ReadAndVerifyFile();
                 File.Delete(Params.FileName);
                 Log.Info("Test file deleted. Total errors: {0}.".Fmt(errors));
                 return errors;
             }
         }
 
-        static void WriteRandomFile(long length)
+        static bool WriteRandomFile(long length)
         {
             Log.Info("Writing file...");
-            FileStream stream = new FileStream(Params.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
             Random rnd = new Random(Params.Seed);
             try
             {
-                byte[] data = new byte[32768];
-                long remaining = length;
-                long remainingAtMsg = -1;
-                int progress = 0;
-                while (remaining > 0)
+                using (var stream = new FileStream(Params.FileName, FileMode.Create, FileAccess.Write, FileShare.Read))
                 {
-                    rnd.NextBytes(data);
-                    int chunk = (int) Math.Min(remaining, data.Length);
-                    stream.Write(data, 0, chunk);
-                    remaining -= chunk;
-                    progress += chunk;
-                    if (progress >= 250 * 1024 * 1024)
+                    byte[] data = new byte[32768];
+                    long remaining = length;
+                    long remainingAtMsg = -1;
+                    int progress = 0;
+                    while (remaining > 0)
                     {
-                        progress = 0;
-                        remainingAtMsg = remaining;
-                        Log.Info("  written {0} MB, {1:0.00}%".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0));
+                        rnd.NextBytes(data);
+                        int chunk = (int) Math.Min(remaining, data.Length);
+                        stream.Write(data, 0, chunk);
+                        remaining -= chunk;
+                        progress += chunk;
+                        if (progress >= 250 * 1024 * 1024)
+                        {
+                            progress = 0;
+                            remainingAtMsg = remaining;
+                            Log.Info("  written {0} MB, {1:0.00}%".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0));
+                        }
                     }
+                    if (remainingAtMsg != 0)
+                        Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1024 * 1024), 100.0));
+                    return true;
                 }
-                if (remainingAtMsg != 0)
-                    Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1024 * 1024), 100.0));
-                Log.Info("");
             }
-            finally
+            catch (Exception e)
             {
-                stream.Close();
+                Log.Error("Could not write to file: " + e.Message);
+                Log.Error("");
+                return false;
             }
         }
 
