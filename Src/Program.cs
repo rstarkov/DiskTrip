@@ -3,6 +3,7 @@ using System.IO;
 using System.Reflection;
 using RT.Util;
 using RT.Util.CommandLine;
+using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 using RT.Util.Streams;
 
@@ -40,10 +41,11 @@ namespace DiskTrip
         public int Seed = 0;
 #pragma warning restore 649 // Field is never assigned to, and will always have its default value null
 
-        public string Validate()
+        public ConsoleColoredString Validate()
         {
             if (ReadOnly && WriteOnly)
-                return "The options --read-only and --write-only are mutually exlusive. Specify only one of the two and try again.";
+                return "The options {0} and {1} are mutually exlusive. Specify only one of the two and try again.".ToConsoleColoredString()
+                    .Fmt("--read-only".Color(ConsoleColor.White), "--write-only".Color(ConsoleColor.White));
             return null;
         }
 
