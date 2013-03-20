@@ -10,9 +10,9 @@ using RT.Util.Streams;
 [assembly: AssemblyTitle("DiskTrip")]
 [assembly: AssemblyCompany("CuteBits")]
 [assembly: AssemblyProduct("DiskTrip")]
-[assembly: AssemblyCopyright("Copyright © CuteBits 2008-2010")]
-[assembly: AssemblyVersion("1.0.9999.9999")]
-[assembly: AssemblyFileVersion("1.0.9999.9999")]
+[assembly: AssemblyCopyright("Copyright © CuteBits 2008-2013")]
+[assembly: AssemblyVersion("2.0.9999.9999")]
+[assembly: AssemblyFileVersion("2.0.9999.9999")]
 
 namespace DiskTrip
 {
@@ -25,7 +25,7 @@ namespace DiskTrip
         public string FileName;
 
         [Option("-s", "--size")]
-        [DocumentationLiteral("The size of the file to create, in MB (megabytes). Defaults to 1000. Ignored in --read-only mode.")]
+        [DocumentationLiteral("The size of the file to create, in MB (millions of bytes). Defaults to 1000. Ignored in --read-only mode.")]
         public long Size = 1000;
 
         [Option("-wo", "--write-only")]
@@ -35,10 +35,6 @@ namespace DiskTrip
         [Option("-ro", "--read-only")]
         [DocumentationLiteral("If specified, only the read phase of the test will be executed. The file will not be deleted.")]
         public bool ReadOnly;
-
-        [Option("-sd", "--seed")]
-        [DocumentationLiteral("A seed to be used for random data generation. Defaults to 0.")]
-        public int Seed = 0;
 #pragma warning restore 649 // Field is never assigned to, and will always have its default value null
 
         public ConsoleColoredString Validate()
@@ -64,13 +60,13 @@ namespace DiskTrip
 
         static int Main(string[] args)
         {
-            try
-            {
 #if DEBUG
-                if (args.Length == 2 && args[0] == "--post-build-check")
-                    return Ut.RunPostBuildChecks(args[1], typeof(Program).Assembly);
+            if (args.Length == 2 && args[0] == "--post-build-check")
+                return Ut.RunPostBuildChecks(args[1], typeof(Program).Assembly);
 #endif
 
+            try
+            {
                 Params = CommandLineParser<CommandLineParams>.Parse(args);
             }
             catch (CommandLineParseException e)
@@ -79,7 +75,7 @@ namespace DiskTrip
                 return 1;
             }
 
-            long writelength = Params.Size * 1024 * 1024;
+            long writelength = Params.Size * 1000 * 1000;
 
             Log = new ConsoleLogger();
             Log.ConfigureVerbosity("1");
@@ -110,7 +106,7 @@ namespace DiskTrip
         static bool WriteRandomFile(long length)
         {
             Log.Info("Writing file...");
-            Random rnd = new Random(Params.Seed);
+            var rnd = new RandomXorshift();
             try
             {
                 using (var stream = new FileStream(Params.FileName, FileMode.Create, FileAccess.Write, FileShare.Read))
@@ -119,6 +115,7 @@ namespace DiskTrip
                     long remaining = length;
                     long remainingAtMsg = -1;
                     int progress = 0;
+                    Ut.Tic();
                     while (remaining > 0)
                     {
                         rnd.NextBytes(data);
@@ -126,15 +123,16 @@ namespace DiskTrip
                         stream.Write(data, 0, chunk);
                         remaining -= chunk;
                         progress += chunk;
-                        if (progress >= 250 * 1024 * 1024)
+                        if (progress >= 250 * 1000 * 1000)
                         {
+                            double speed = progress / Ut.Toc(); Ut.Tic();
                             progress = 0;
                             remainingAtMsg = remaining;
-                            Log.Info("  written {0} MB, {1:0.00}%".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0));
+                            Log.Info("  written {0} MB @ {2:#,0} MB/s, {1:0.00}%".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, speed / 1000 / 1000));
                         }
                     }
                     if (remainingAtMsg != 0)
-                        Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1024 * 1024), 100.0));
+                        Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1000 * 1000), 100.0));
                     return true;
                 }
             }
@@ -150,7 +148,7 @@ namespace DiskTrip
         {
             Log.Info("Reading file...");
             FileStream stream = new FileStream(Params.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
-            Random rnd = new Random(Params.Seed);
+            var rnd = new RandomXorshift();
             try
             {
                 long length = stream.Length;
@@ -160,12 +158,13 @@ namespace DiskTrip
                 long remainingAtMsg = -1;
                 int progress = 0;
                 int errors = 0;
-                CRC32Stream signature = new CRC32Stream(new VoidStream());
-                BinaryWriter signatureWriter = new BinaryWriter(signature);
+                var signature = new CRC32Stream(new VoidStream());
+                var signatureWriter = new BinaryWriter(signature);
+                Ut.Tic();
                 while (remaining > 0)
                 {
                     int chunk = (int) Math.Min(remaining, data.Length);
-                    stream.Read(read, 0, chunk);
+                    stream.FillBuffer(read, 0, chunk);
                     rnd.NextBytes(data);
 
                     for (int i = 0; i < chunk; i++)
@@ -177,15 +176,16 @@ namespace DiskTrip
 
                     remaining -= chunk;
                     progress += chunk;
-                    if (progress >= 250 * 1024 * 1024)
+                    if (progress >= 250 * 1000 * 1000)
                     {
+                        double speed = progress / Ut.Toc(); Ut.Tic();
                         progress = 0;
                         remainingAtMsg = remaining;
-                        Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1024 * 1024), (length - remaining) / (double) length * 100.0, errors, signature.CRC));
+                        Log.Info("  read and verified {0} MB @ {4:#,0} MB/s, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000));
                     }
                 }
                 if (remainingAtMsg != 0)
-                    Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1024 * 1024), 100.0, errors, signature.CRC));
+                    Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
                 Log.Info("");
                 return errors;
             }
@@ -193,6 +193,38 @@ namespace DiskTrip
             {
                 stream.Close();
             }
+        }
+    }
+
+    sealed class RandomXorshift
+    {
+        private uint _x = 123456789;
+        private uint _y = 362436069;
+        private uint _z = 521288629;
+        private uint _w = 88675123;
+
+        public unsafe void NextBytes(byte[] buf)
+        {
+            if (buf.Length % 16 != 0)
+                throw new ArgumentException("The buffer length must be a multiple of 16.", "buf");
+            uint x = _x, y = _y, z = _z, w = _w;
+            fixed (byte* pbytes = buf)
+            {
+                uint* pbuf = (uint*) pbytes;
+                uint* pend = (uint*) (pbytes + buf.Length);
+                while (pbuf < pend)
+                {
+                    uint tx = x ^ (x << 11);
+                    uint ty = y ^ (y << 11);
+                    uint tz = z ^ (z << 11);
+                    uint tw = w ^ (w << 11);
+                    *(pbuf++) = x = w ^ (w >> 19) ^ (tx ^ (tx >> 8));
+                    *(pbuf++) = y = x ^ (x >> 19) ^ (ty ^ (ty >> 8));
+                    *(pbuf++) = z = y ^ (y >> 19) ^ (tz ^ (tz >> 8));
+                    *(pbuf++) = w = z ^ (z >> 19) ^ (tw ^ (tw >> 8));
+                }
+            }
+            _x = x; _y = y; _z = z; _w = w;
         }
     }
 }
