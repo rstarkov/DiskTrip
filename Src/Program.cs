@@ -1,5 +1,7 @@
 using System;
+using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Reflection;
 using RT.Util;
 using RT.Util.CommandLine;
@@ -35,6 +37,10 @@ namespace DiskTrip
         [Option("-ro", "--read-only")]
         [DocumentationLiteral("If specified, only the read phase of the test will be executed. The file will not be deleted.")]
         public bool ReadOnly;
+
+        [Option("-kf", "--keep-file")]
+        [DocumentationLiteral("If specified, the test file will not be deleted once all tests are done. This option is implied in --read-only and --write-only modes.")]
+        public bool KeepFile;
 #pragma warning restore 649 // Field is never assigned to, and will always have its default value null
 
         public ConsoleColoredString Validate()
@@ -97,7 +103,8 @@ namespace DiskTrip
                 errors += ReadAndVerifyFile();
                 if (errors != 0)
                     errors += ReadAndVerifyFile();
-                File.Delete(Params.FileName);
+                if (!Params.KeepFile)
+                    File.Delete(Params.FileName);
                 Log.Info("Test file deleted. Total errors: {0}.".Fmt(errors));
                 return errors;
             }
@@ -107,6 +114,7 @@ namespace DiskTrip
         {
             Log.Info("Writing file...");
             var rnd = new RandomXorshift();
+            var speeds = new Queue<double>();
             try
             {
                 using (var stream = new FileStream(Params.FileName, FileMode.Create, FileAccess.Write, FileShare.Read))
@@ -126,9 +134,12 @@ namespace DiskTrip
                         if (progress >= 250 * 1000 * 1000)
                         {
                             double speed = progress / Ut.Toc(); Ut.Tic();
+                            speeds.Enqueue(speed);
+                            while (speeds.Count > 80) // 20 GB
+                                speeds.Dequeue();
                             progress = 0;
                             remainingAtMsg = remaining;
-                            Log.Info("  written {0} MB @ {2:#,0} MB/s, {1:0.00}%".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, speed / 1000 / 1000));
+                            Log.Info("  written {0:#,0} MB @ {2:#,0} MB/s ({3:#,0} MB/s average), {1:0.00}%".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
                         }
                     }
                     if (remainingAtMsg != 0)
@@ -149,6 +160,7 @@ namespace DiskTrip
             Log.Info("Reading file...");
             FileStream stream = new FileStream(Params.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
             var rnd = new RandomXorshift();
+            var speeds = new Queue<double>();
             try
             {
                 long length = stream.Length;
@@ -163,29 +175,67 @@ namespace DiskTrip
                 Ut.Tic();
                 while (remaining > 0)
                 {
-                    int chunk = (int) Math.Min(remaining, data.Length);
-                    stream.FillBuffer(read, 0, chunk);
+                    int chunkLength = (int) Math.Min(remaining, data.Length);
+                    stream.FillBuffer(read, 0, chunkLength);
                     rnd.NextBytes(data);
 
-                    for (int i = 0; i < chunk; i++)
-                        if (data[i] != read[i])
+                    // Compare chunk's worth of bytes in "read" and "data"
+                    unsafe
+                    {
+                        fixed (byte* pb1 = read, pb2 = data)
                         {
-                            errors++;
-                            signatureWriter.Write(length - remaining + i);
-                        }
+                            ulong* pl1 = (ulong*) pb1;
+                            ulong* pl2 = (ulong*) pb2;
+                            ulong* pend1 = pl1 + (chunkLength / (sizeof(ulong) * 4)) * 4; // number of comparisons in the unrolled loop
 
-                    remaining -= chunk;
-                    progress += chunk;
+                            // The core comparison
+                            while (pl1 < pend1)
+                            {
+                                if (*(pl1++) != *(pl2++)) goto notequal;
+                                if (*(pl1++) != *(pl2++)) goto notequal;
+                                if (*(pl1++) != *(pl2++)) goto notequal;
+                                if (*(pl1++) != *(pl2++)) goto notequal;
+                            }
+                            goto equal;
+
+                            notequal: ;
+                            // Compare the whole block again the slow way since it's by far the easiest way to find the different bytes and add the correct offests to the error signature
+                            for (int i = 0; i < chunkLength; i++)
+                                if (data[i] != read[i])
+                                {
+                                    errors++;
+                                    signatureWriter.Write(length - remaining + i);
+                                }
+                            goto done;
+
+                            equal: ;
+                            // Most of the block compared as equal. Compare the bit at the end.
+                            for (int i = (int) ((byte*) pend1 - pb1); i < chunkLength; i++)
+                                if (data[i] != read[i])
+                                {
+                                    errors++;
+                                    signatureWriter.Write(length - remaining + i);
+                                }
+
+                            done: ;
+                        }
+                    }
+
+                    remaining -= chunkLength;
+                    progress += chunkLength;
                     if (progress >= 250 * 1000 * 1000)
                     {
                         double speed = progress / Ut.Toc(); Ut.Tic();
+                        speeds.Enqueue(speed);
+                        while (speeds.Count > 80) // 20 GB
+                            speeds.Dequeue();
                         progress = 0;
                         remainingAtMsg = remaining;
-                        Log.Info("  read and verified {0} MB @ {4:#,0} MB/s, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000));
+                        Log.Info("  read and verified {0:#,0} MB @ {4:#,0} MB/s ({5:#,0} MB/s average), {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
                     }
                 }
                 if (remainingAtMsg != 0)
-                    Log.Info("  read and verified {0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
+                    Log.Info("  read and verified {0:#,0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
                 Log.Info("");
                 return errors;
             }
@@ -193,6 +243,20 @@ namespace DiskTrip
             {
                 stream.Close();
             }
+        }
+
+        private static double averageSpeed(Queue<double> speeds)
+        {
+            var set = speeds.ToList();
+            for (int i = 0; i < speeds.Count / 5; i++) // remove the worst fitting 20%
+            {
+                var avg = set.Average();
+                var worst = set.MaxElement(v => Math.Abs(v - avg));
+                if (Math.Max(avg, worst) / Math.Min(avg, worst) < 1.2)
+                    return avg;
+                set.Remove(worst);
+            }
+            return set.Average();
         }
     }
 
