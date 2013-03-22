@@ -85,6 +85,7 @@ namespace DiskTrip
 
             Log = new ConsoleLogger();
             Log.ConfigureVerbosity("1");
+            Log.MessageFormat = "{0} | ";
 
             if (Params.WriteOnly)
             {
@@ -137,7 +138,7 @@ namespace DiskTrip
                             speeds.Enqueue(speed);
                             while (speeds.Count > 80) // 20 GB
                                 speeds.Dequeue();
-                            progress = 0;
+                            progress -= 250 * 1000 * 1000;
                             remainingAtMsg = remaining;
                             Log.Info("  written {0:#,0} MB @ {2:#,0} MB/s ({3:#,0} MB/s average), {1:0.00}%".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
                         }
@@ -229,13 +230,13 @@ namespace DiskTrip
                         speeds.Enqueue(speed);
                         while (speeds.Count > 80) // 20 GB
                             speeds.Dequeue();
-                        progress = 0;
+                        progress -= 250 * 1000 * 1000;
                         remainingAtMsg = remaining;
-                        Log.Info("  read and verified {0:#,0} MB @ {4:#,0} MB/s ({5:#,0} MB/s average), {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
+                        Log.Info("  verified {0:#,0} MB @ {4:#,0} MB/s ({5:#,0} MB/s average), {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
                     }
                 }
                 if (remainingAtMsg != 0)
-                    Log.Info("  read and verified {0:#,0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
+                    Log.Info("  verified {0:#,0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
                 Log.Info("");
                 return errors;
             }
