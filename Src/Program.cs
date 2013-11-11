@@ -54,7 +54,7 @@ namespace DiskTrip
 #if DEBUG
         private static void PostBuildCheck(IPostBuildReporter rep)
         {
-            CommandLineParser<CommandLineParams>.PostBuildStep(rep, null);
+            CommandLineParser.PostBuildStep<CommandLineParams>(rep, null);
         }
 #endif
     }
@@ -73,7 +73,7 @@ namespace DiskTrip
 
             try
             {
-                Params = CommandLineParser<CommandLineParams>.Parse(args);
+                Params = CommandLineParser.Parse<CommandLineParams>(args);
             }
             catch (CommandLineParseException e)
             {
