@@ -1,20 +1,9 @@
-using System;
-using System.Collections.Generic;
-using System.IO;
-using System.Linq;
-using System.Reflection;
+﻿using RT.CommandLine;
+using RT.PostBuild;
 using RT.Util;
-using RT.Util.CommandLine;
 using RT.Util.Consoles;
 using RT.Util.ExtensionMethods;
 using RT.Util.Streams;
-
-[assembly: AssemblyTitle("DiskTrip")]
-[assembly: AssemblyCompany("CuteBits")]
-[assembly: AssemblyProduct("DiskTrip")]
-[assembly: AssemblyCopyright("Copyright © CuteBits 2008-2013")]
-[assembly: AssemblyVersion("2.0.9999.9999")]
-[assembly: AssemblyFileVersion("2.0.9999.9999")]
 
 namespace DiskTrip
 {
@@ -54,7 +43,7 @@ namespace DiskTrip
 #if DEBUG
         private static void PostBuildCheck(IPostBuildReporter rep)
         {
-            CommandLineParser.PostBuildStep<CommandLineParams>(rep, null);
+            CommandLineParser.PostBuildStep<CommandLineParams>(rep);
         }
 #endif
     }
@@ -68,7 +57,7 @@ namespace DiskTrip
         {
 #if DEBUG
             if (args.Length == 2 && args[0] == "--post-build-check")
-                return Ut.RunPostBuildChecks(args[1], typeof(Program).Assembly);
+                return PostBuildChecker.RunPostBuildChecks(args[1], typeof(Program).Assembly);
 #endif
 
             try
@@ -199,7 +188,7 @@ namespace DiskTrip
                             }
                             goto equal;
 
-                            notequal: ;
+                            notequal:;
                             // Compare the whole block again the slow way since it's by far the easiest way to find the different bytes and add the correct offests to the error signature
                             for (int i = 0; i < chunkLength; i++)
                                 if (data[i] != read[i])
@@ -209,7 +198,7 @@ namespace DiskTrip
                                 }
                             goto done;
 
-                            equal: ;
+                            equal:;
                             // Most of the block compared as equal. Compare the bit at the end.
                             for (int i = (int) ((byte*) pend1 - pb1); i < chunkLength; i++)
                                 if (data[i] != read[i])
@@ -218,7 +207,7 @@ namespace DiskTrip
                                     signatureWriter.Write(length - remaining + i);
                                 }
 
-                            done: ;
+                            done:;
                         }
                     }
 
