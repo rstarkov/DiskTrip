@@ -73,21 +73,27 @@ static class Program
         Log.ConfigureVerbosity("1");
         Log.MessageFormat = "{0} | ";
 
-        int errors = 0;
-
+        // Write (if requested)
         if (Args.Write)
             if (!WriteRandomFile())
                 return 1;
-        errors += ReadAndVerifyFile();
-        if (errors != 0 && Args.Write) // in write+verify mode read again to distinguish unreliable writes from unreliable reads
-            errors += ReadAndVerifyFile();
+
+        // Read and verify
+        var (errors, signature) = ReadAndVerifyFile();
+
+        // Delete (if requested)
         if (Args.Delete)
         {
             File.Delete(Args.FileName);
             Log.Info("Test file deleted.");
         }
-        Log.Info($"Total errors: {errors}.");
-        return errors;
+
+        // Report
+        if (errors == 0)
+            Log.Info("No errors detected.");
+        else
+            Log.Error($"Errors found. Mismatching bytes count: {errors:#,0}. Signature: {signature:X8}");
+        return signature;
     }
 
     static bool WriteRandomFile()
@@ -134,7 +140,7 @@ static class Program
         }
     }
 
-    static int ReadAndVerifyFile()
+    static (int errors, int signature) ReadAndVerifyFile()
     {
         Log.Info("Reading file...");
         using var stream = new FileStream(Args.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
@@ -208,13 +214,13 @@ static class Program
                     speeds.Dequeue();
                 progress -= 500_000_000;
                 remainingAtMsg = remaining;
-                Log.Info($"  verified {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%, errors: {errors}, signature: {signature.CRC:X8}");
+                Log.Info($"  verified {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
             }
         }
         if (remainingAtMsg != 0)
-            Log.Info($"  verified {length / 1_000_000:#,0} MB, {100.0:0.00}%, errors: {errors}, signature: {signature.CRC:X8}");
+            Log.Info($"  verified {length / 1_000_000:#,0} MB, {100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
         Log.Info("");
-        return errors;
+        return (errors, (int) signature.CRC);
     }
 
     private static double averageSpeed(Queue<double> speeds)
