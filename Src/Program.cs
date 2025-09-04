@@ -60,12 +60,12 @@ static class Program
 
         if (Args.Write && File.Exists(Args.FileName) && !Args.Overwrite)
         {
-            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} already exists. Use option {option}--overwrite{} to overwrite it.""")));
+            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} already exists. Use option {option}--overwrite{} to overwrite it.""")), stdErr: true);
             return 1;
         }
         if (!Args.Write && !File.Exists(Args.FileName))
         {
-            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} does not exist. Use option {option}--write{} to create one.""")));
+            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} does not exist. Use option {option}--write{} to create one.""")), stdErr: true);
             return 1;
         }
 
