@@ -86,8 +86,11 @@ static class Program
             if (errors != 0)
                 errors += ReadAndVerifyFile();
             if (!Params.KeepFile)
+            {
                 File.Delete(Params.FileName);
-            Log.Info("Test file deleted. Total errors: {0}.".Fmt(errors));
+                Log.Info("Test file deleted.");
+            }
+            Log.Info($"Total errors: {errors}.");
             return errors;
         }
     }
