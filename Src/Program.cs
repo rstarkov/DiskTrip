@@ -115,13 +115,13 @@ static class Program
                 stream.Write(data, 0, chunk);
                 remaining -= chunk;
                 progress += chunk;
-                if (progress >= 250 * 1_000_000)
+                if (progress >= 500_000_000)
                 {
                     double speed = progress / Ut.Tic();
                     speeds.Enqueue(speed);
                     while (speeds.Count > 80) // 20 GB
                         speeds.Dequeue();
-                    progress -= 250 * 1_000_000;
+                    progress -= 500_000_000;
                     remainingAtMsg = remaining;
                     Log.Info($"  written {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%");
                 }
@@ -204,13 +204,13 @@ static class Program
 
             remaining -= chunkLength;
             progress += chunkLength;
-            if (progress >= 250 * 1_000_000)
+            if (progress >= 500_000_000)
             {
                 double speed = progress / Ut.Tic();
                 speeds.Enqueue(speed);
                 while (speeds.Count > 80) // 20 GB
                     speeds.Dequeue();
-                progress -= 250 * 1_000_000;
+                progress -= 500_000_000;
                 remainingAtMsg = remaining;
                 Log.Info($"  verified {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%, errors: {errors}, signature: {signature.CRC:X8}");
             }
