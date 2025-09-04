@@ -12,7 +12,7 @@ class CommandLine : ICommandLineValidatable
 {
     [IsPositional, IsMandatory]
     [Documentation("The name of the test file to write and/or verify.")]
-    public string FileName;
+    public string FileName = null;
 
     [Option("-w", "--write")]
     [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.""")]
@@ -22,11 +22,11 @@ class CommandLine : ICommandLineValidatable
 
     [Option("-d", "--delete")]
     [DocumentationRhoML("{h}Deletes the test file.{}{n}{}Normally the test file is not deleted regardless of the outcome of the test.")]
-    public bool Delete;
+    public bool Delete = false;
 
     [Option("-o", "--overwrite")]
     [DocumentationRhoML("{h}Allows overwriting the test file if it already exists.{}{n}{}Normally DiskTrip exits with an error code if the test file already exists.")]
-    public bool Overwrite;
+    public bool Overwrite = false;
 
     public ConsoleColoredString Validate()
     {
@@ -38,12 +38,10 @@ class CommandLine : ICommandLineValidatable
         return null;
     }
 
-#if DEBUG
     private static void PostBuildCheck(IPostBuildReporter rep)
     {
         CommandLineParser.PostBuildStep<CommandLine>(rep);
     }
-#endif
 }
 
 static class Program
@@ -53,10 +51,8 @@ static class Program
 
     static int Main(string[] args)
     {
-#if DEBUG
         if (args.Length == 2 && args[0] == "--post-build-check")
             return PostBuildChecker.RunPostBuildChecks(args[1], typeof(Program).Assembly);
-#endif
 
         Args = CommandLineParser.ParseOrWriteUsageToConsole<CommandLine>(args);
         if (Args == null)
