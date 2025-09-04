@@ -10,31 +10,31 @@ namespace DiskTrip;
 [Documentation("Reads, writes and verifies large pseudo-random files in order to confirm error-less filesystem read/write operations.")]
 class CommandLine : ICommandLineValidatable
 {
-    [Option("-f", "--filename"), IsMandatory]
-    [Documentation("The name of the file to be written to and read from.")]
-    public string FileName = null;
+    [IsPositional, IsMandatory]
+    [Documentation("The name of the test file to write and/or verify.")]
+    public string FileName;
 
-    [Option("-s", "--size")]
-    [Documentation("The size of the file to create, in MB (millions of bytes). Defaults to 1000. Ignored in --read-only mode.")]
-    public long Size = 1000;
+    [Option("-w", "--write")]
+    [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.""")]
+    public double? WriteSize = null;
+    public long WriteSizeBytes;
+    public bool Write => WriteSize != null;
 
-    [Option("-wo", "--write-only")]
-    [Documentation("If specified, only the write phase of the test will be executed. The resulting file will not be deleted.")]
-    public bool WriteOnly = false;
+    [Option("-d", "--delete")]
+    [DocumentationRhoML("{h}Deletes the test file.{}{n}{}Normally the test file is not deleted regardless of the outcome of the test.")]
+    public bool Delete;
 
-    [Option("-ro", "--read-only")]
-    [Documentation("If specified, only the read phase of the test will be executed. The file will not be deleted.")]
-    public bool ReadOnly = false;
-
-    [Option("-kf", "--keep-file")]
-    [Documentation("If specified, the test file will not be deleted once all tests are done. This option is implied in --read-only and --write-only modes.")]
-    public bool KeepFile = false;
+    [Option("-o", "--overwrite")]
+    [DocumentationRhoML("{h}Allows overwriting the test file if it already exists.{}{n}{}Normally DiskTrip exits with an error code if the test file already exists.")]
+    public bool Overwrite;
 
     public ConsoleColoredString Validate()
     {
-        if (ReadOnly && WriteOnly)
-            return "The options {0} and {1} are mutually exlusive. Specify only one of the two and try again.".ToConsoleColoredString()
-                .Fmt("--read-only".Color(ConsoleColor.White), "--write-only".Color(ConsoleColor.White));
+        if (Write && WriteSize <= 0)
+            return CommandLineParser.Colorize(RhoML.Parse($$"""The {option}--write{} size must be greater than zero."""));
+        WriteSizeBytes = WriteSize == null ? 0 : (long) Math.Round(WriteSize.Value * 1_000_000);
+        if (!Write && Overwrite)
+            return CommandLineParser.Colorize(RhoML.Parse($$"""Option {option}--overwrite{} has no effect unless {option}--write{} is also specified."""));
         return null;
     }
 
@@ -62,35 +62,36 @@ static class Program
         if (Args == null)
             return 1;
 
+        if (Args.Write && File.Exists(Args.FileName) && !Args.Overwrite)
+        {
+            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} already exists. Use option {option}--overwrite{} to overwrite it.""")));
+            return 1;
+        }
+        if (!Args.Write && !File.Exists(Args.FileName))
+        {
+            ConsoleUtil.WriteParagraphs(CommandLineParser.Colorize(RhoML.Parse($$"""The file {field}{{nameof(CommandLine.FileName)}}{} does not exist. Use option {option}--write{} to create one.""")));
+            return 1;
+        }
+
         Log = new ConsoleLogger();
         Log.ConfigureVerbosity("1");
         Log.MessageFormat = "{0} | ";
 
-        if (Args.WriteOnly)
-        {
-            return WriteRandomFile() ? 0 : 1;
-        }
-        else if (Args.ReadOnly)
-        {
-            return ReadAndVerifyFile();
-        }
-        else
-        {
-            int errors = 0;
+        int errors = 0;
 
+        if (Args.Write)
             if (!WriteRandomFile())
                 return 1;
+        errors += ReadAndVerifyFile();
+        if (errors != 0 && Args.Write) // in write+verify mode read again to distinguish unreliable writes from unreliable reads
             errors += ReadAndVerifyFile();
-            if (errors != 0)
-                errors += ReadAndVerifyFile();
-            if (!Args.KeepFile)
-            {
-                File.Delete(Args.FileName);
-                Log.Info("Test file deleted.");
-            }
-            Log.Info($"Total errors: {errors}.");
-            return errors;
+        if (Args.Delete)
+        {
+            File.Delete(Args.FileName);
+            Log.Info("Test file deleted.");
         }
+        Log.Info($"Total errors: {errors}.");
+        return errors;
     }
 
     static bool WriteRandomFile()
@@ -102,7 +103,7 @@ static class Program
         {
             using var stream = new FileStream(Args.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
             byte[] data = new byte[32768];
-            long length = Args.Size * 1_000_000;
+            long length = Args.WriteSizeBytes;
             long remaining = length;
             long remainingAtMsg = -1;
             int progress = 0;
