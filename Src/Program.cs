@@ -62,7 +62,7 @@ static class Program
         if (Params == null)
             return 1;
 
-        long writelength = Params.Size * 1000 * 1000;
+        long writelength = Params.Size * 1_000_000;
 
         Log = new ConsoleLogger();
         Log.ConfigureVerbosity("1");
@@ -115,19 +115,19 @@ static class Program
                 stream.Write(data, 0, chunk);
                 remaining -= chunk;
                 progress += chunk;
-                if (progress >= 250 * 1000 * 1000)
+                if (progress >= 250 * 1_000_000)
                 {
-                    double speed = progress / Ut.Toc(); Ut.Tic();
+                    double speed = progress / Ut.Tic();
                     speeds.Enqueue(speed);
                     while (speeds.Count > 80) // 20 GB
                         speeds.Dequeue();
-                    progress -= 250 * 1000 * 1000;
+                    progress -= 250 * 1_000_000;
                     remainingAtMsg = remaining;
-                    Log.Info("  written {0:#,0} MB @ {2:#,0} MB/s ({3:#,0} MB/s average), {1:0.00}%".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
+                    Log.Info($"  written {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%");
                 }
             }
             if (remainingAtMsg != 0)
-                Log.Info("  written {0} MB, {1:0.00}%".Fmt(length / (1000 * 1000), 100.0));
+                Log.Info($"  written {length / 1_000_000:#,0} MB, {100.0:0.00}%");
             return true;
         }
         catch (Exception e)
@@ -204,19 +204,19 @@ static class Program
 
             remaining -= chunkLength;
             progress += chunkLength;
-            if (progress >= 250 * 1000 * 1000)
+            if (progress >= 250 * 1_000_000)
             {
                 double speed = progress / Ut.Tic();
                 speeds.Enqueue(speed);
                 while (speeds.Count > 80) // 20 GB
                     speeds.Dequeue();
-                progress -= 250 * 1000 * 1000;
+                progress -= 250 * 1_000_000;
                 remainingAtMsg = remaining;
-                Log.Info("  verified {0:#,0} MB @ {4:#,0} MB/s ({5:#,0} MB/s average), {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt((length - remaining) / (1000 * 1000), (length - remaining) / (double) length * 100.0, errors, signature.CRC, speed / 1000 / 1000, averageSpeed(speeds) / 1000 / 1000));
+                Log.Info($"  verified {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%, errors: {errors}, signature: {signature.CRC:X8}");
             }
         }
         if (remainingAtMsg != 0)
-            Log.Info("  verified {0:#,0} MB, {1:0.00}%, errors: {2}, signature: {3:X8}".Fmt(length / (1000 * 1000), 100.0, errors, signature.CRC));
+            Log.Info($"  verified {length / 1_000_000:#,0} MB, {100.0:0.00}%, errors: {errors}, signature: {signature.CRC:X8}");
         Log.Info("");
         return errors;
     }
@@ -246,7 +246,7 @@ sealed class RandomXorshift
     public unsafe void NextBytes(byte[] buf)
     {
         if (buf.Length % 16 != 0)
-            throw new ArgumentException("The buffer length must be a multiple of 16.", "buf");
+            throw new ArgumentException("The buffer length must be a multiple of 16.", nameof(buf));
         uint x = _x, y = _y, z = _z, w = _w;
         fixed (byte* pbytes = buf)
         {
