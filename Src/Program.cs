@@ -249,6 +249,7 @@ static partial class Program
                         {
                             errors++;
                             signatureWriter.Write(stream.Position - blockLength + i);
+                            signatureWriter.Write(read[i]);
                         }
                     goto done;
 
@@ -259,6 +260,7 @@ static partial class Program
                         {
                             errors++;
                             signatureWriter.Write(stream.Position - blockLength + i);
+                            signatureWriter.Write(read[i]);
                         }
 
                     done:;
