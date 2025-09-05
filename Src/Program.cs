@@ -137,7 +137,7 @@ static partial class Program
         try
         {
             using var stream = new FileStream(Args.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
-            byte[] data = new byte[32768];
+            byte[] data = new byte[256 * 1024];
             var path = Path.GetDirectoryName(Args.FileName);
             long remaining = Args.WriteFill ? GetFreeSpace(path) : Args.WriteSizeBytes;
             long lastProgressAt = -1;
@@ -208,8 +208,8 @@ static partial class Program
         using var stream = new FileStream(Args.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
         var rnd = new RandomXorshift();
         var speeds = new Queue<double>();
-        byte[] data = new byte[32768];
-        byte[] read = new byte[32768];
+        byte[] data = new byte[256 * 1024];
+        byte[] read = new byte[256 * 1024];
         long remaining = stream.Length;
         long lastProgressAt = -1;
         int errors = 0;
