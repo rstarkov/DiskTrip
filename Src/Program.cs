@@ -140,38 +140,42 @@ static partial class Program
             byte[] data = new byte[32768];
             var path = Path.GetDirectoryName(Args.FileName);
             long remaining = Args.WriteFill ? GetFreeSpace(path) : Args.WriteSizeBytes;
-            long lastUpdateAt = -1;
-            int progress = 0;
+            long lastProgressAt = -1;
             Ut.Tic();
             while (remaining > 0 || Args.WriteFill)
             {
                 rnd.NextBytes(data);
-                int chunk = Args.WriteFill ? data.Length : (int) Math.Min(remaining, data.Length);
-                try { stream.Write(data, 0, chunk); }
+                int blockLength = Args.WriteFill ? data.Length : (int) Math.Min(remaining, data.Length);
+                try { stream.Write(data, 0, blockLength); }
                 catch (IOException ex) when ((ex.HResult & 0xFFFF) == 0x27 || (ex.HResult & 0xFFFF) == 0x70)
                 {
-                    fillupDisk(stream, data, chunk);
-                    Log.Info($"  written {stream.Position / 1_000_000:#,0} MB, {100.0:0.00}%. Stopping because disk is full.");
+                    fillupDisk(stream, data, blockLength);
+                    printProgress();
+                    Log.Info($"  stopping because the disk is full");
                     return true;
                 }
-                remaining -= chunk;
-                progress += chunk;
-                if (progress >= 500_000_000)
+                remaining -= blockLength;
+                if (stream.Position / 500_000_000 != (stream.Position - blockLength) / 500_000_000)
                 {
-                    double speed = progress / Ut.Tic();
-                    speeds.Enqueue(speed);
-                    while (speeds.Count > 80) // 20 GB
-                        speeds.Dequeue();
-                    progress -= 500_000_000;
                     if (Args.WriteFill)
                         remaining = GetFreeSpace(path);
-                    lastUpdateAt = stream.Position;
-                    Log.Info($"  written {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%");
+                    printProgress();
                 }
             }
-            if (lastUpdateAt != stream.Position)
-                Log.Info($"  written {stream.Position / 1_000_000:#,0} MB, {100.0:0.00}%");
+            printProgress();
             return true;
+
+            void printProgress()
+            {
+                if (stream.Position == lastProgressAt)
+                    return;
+                double speed = (stream.Position - lastProgressAt) / Ut.Tic();
+                speeds.Enqueue(speed);
+                while (speeds.Count > 40) // 20 GB
+                    speeds.Dequeue();
+                lastProgressAt = stream.Position;
+                Log.Info($"  written {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%");
+            }
         }
         catch (Exception e)
         {
@@ -204,20 +208,19 @@ static partial class Program
         using var stream = new FileStream(Args.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
         var rnd = new RandomXorshift();
         var speeds = new Queue<double>();
-        long length = stream.Length;
         byte[] data = new byte[32768];
         byte[] read = new byte[32768];
-        long remaining = length;
-        long remainingAtMsg = -1;
-        int progress = 0;
+        long remaining = stream.Length;
+        long lastProgressAt = -1;
         int errors = 0;
         var signature = new CRC32Stream(new VoidStream());
         var signatureWriter = new BinaryWriter(signature);
         Ut.Tic();
         while (remaining > 0)
         {
-            int chunkLength = (int) Math.Min(remaining, data.Length);
-            stream.FillBuffer(read, 0, chunkLength);
+            int blockLength = (int) Math.Min(remaining, data.Length);
+            blockLength = stream.FillBuffer(read, 0, blockLength);
+            remaining -= blockLength;
             rnd.NextBytes(data);
 
             // Compare chunk's worth of bytes in "read" and "data"
@@ -227,7 +230,7 @@ static partial class Program
                 {
                     ulong* pl1 = (ulong*) pb1;
                     ulong* pl2 = (ulong*) pb2;
-                    ulong* pend1 = pl1 + (chunkLength / (sizeof(ulong) * 4)) * 4; // number of comparisons in the unrolled loop
+                    ulong* pend1 = pl1 + (blockLength / (sizeof(ulong) * 4)) * 4; // number of comparisons in the unrolled loop
 
                     // The core comparison
                     while (pl1 < pend1)
@@ -241,44 +244,45 @@ static partial class Program
 
                     notequal:;
                     // Compare the whole block again the slow way since it's by far the easiest way to find the different bytes and add the correct offests to the error signature
-                    for (int i = 0; i < chunkLength; i++)
+                    for (int i = 0; i < blockLength; i++)
                         if (data[i] != read[i])
                         {
                             errors++;
-                            signatureWriter.Write(length - remaining + i);
+                            signatureWriter.Write(stream.Position - blockLength + i);
                         }
                     goto done;
 
                     equal:;
                     // Most of the block compared as equal. Compare the bit at the end.
-                    for (int i = (int) ((byte*) pend1 - pb1); i < chunkLength; i++)
+                    for (int i = (int) ((byte*) pend1 - pb1); i < blockLength; i++)
                         if (data[i] != read[i])
                         {
                             errors++;
-                            signatureWriter.Write(length - remaining + i);
+                            signatureWriter.Write(stream.Position - blockLength + i);
                         }
 
                     done:;
                 }
             }
 
-            remaining -= chunkLength;
-            progress += chunkLength;
-            if (progress >= 500_000_000)
-            {
-                double speed = progress / Ut.Tic();
-                speeds.Enqueue(speed);
-                while (speeds.Count > 80) // 20 GB
-                    speeds.Dequeue();
-                progress -= 500_000_000;
-                remainingAtMsg = remaining;
-                Log.Info($"  verified {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
-            }
+            if (stream.Position / 500_000_000 != (stream.Position - blockLength) / 500_000_000)
+                printProgress();
         }
-        if (remainingAtMsg != 0)
-            Log.Info($"  verified {length / 1_000_000:#,0} MB, {100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
+        printProgress();
         Log.Info("");
         return (errors, (int) signature.CRC);
+
+        void printProgress()
+        {
+            if (stream.Position == lastProgressAt)
+                return;
+            double speed = (stream.Position - lastProgressAt) / Ut.Tic();
+            speeds.Enqueue(speed);
+            while (speeds.Count > 40) // 20 GB
+                speeds.Dequeue();
+            lastProgressAt = stream.Position;
+            Log.Info($"  verified {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
+        }
     }
 
     private static double averageSpeed(Queue<double> speeds)
