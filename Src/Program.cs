@@ -1,4 +1,6 @@
-﻿using RT.CommandLine;
+﻿using System.Runtime.InteropServices;
+using System.Text.RegularExpressions;
+using RT.CommandLine;
 using RT.PostBuild;
 using RT.Util;
 using RT.Util.Consoles;
@@ -15,10 +17,11 @@ class CommandLine : ICommandLineValidatable
     public string FileName = null;
 
     [Option("-w", "--write")]
-    [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.""")]
-    public double? WriteSize = null;
+    [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.{n}{}The number may be suffixed with {h}K{}, {h}M{}, {h}G{} (default), {h}T{}, {h}Ki{}, {h}Mi{}, {h}Gi{}, {h}Ti{} or {h}b{} to override the units (case-insensitive).{n}{}A special value of {h}fill{} (or {h}full{} or {h}free{}) specifies that all free space should be consumed.""")]
+    public string WriteSize = null;
     public long WriteSizeBytes;
     public bool Write => WriteSize != null;
+    public bool WriteFill => Write && WriteSizeBytes == 0;
 
     [Option("-d", "--delete")]
     [DocumentationRhoML("{h}Deletes the test file.{}{n}{}Normally the test file is not deleted regardless of the outcome of the test.")]
@@ -30,12 +33,42 @@ class CommandLine : ICommandLineValidatable
 
     public ConsoleColoredString Validate()
     {
-        if (Write && WriteSize <= 0)
-            return CommandLineParser.Colorize(RhoML.Parse($$"""The {option}--write{} size must be greater than zero."""));
-        WriteSizeBytes = WriteSize == null ? 0 : (long) Math.Round(WriteSize.Value * 1_000_000);
+        WriteSizeBytes = WriteSize == null ? 0 : parseSize(WriteSize);
         if (!Write && Overwrite)
             return CommandLineParser.Colorize(RhoML.Parse($$"""Option {option}--overwrite{} has no effect unless {option}--write{} is also specified."""));
+        FileName = Path.GetFullPath(FileName);
         return null;
+    }
+
+    private long parseSize(string size)
+    {
+        size = size.Trim().ToLowerInvariant();
+        if (size == "fill" || size == "full" || size == "free")
+            return 0;
+        var parsed = Regex.Match(size, @"^(?<num>\d+([,\.]\d*)?)(?<suf>\w+)?$");
+        if (!parsed.Success || !double.TryParse(parsed.Groups["num"].Value, out var num))
+            throw new CommandLineValidationException(RhoML.Parse($$"""The format of option {option}--write{} {h}{{size}}{} is not recognized."""));
+        var suf = parsed.Groups["suf"].Success ? parsed.Groups["suf"].Value : null;
+        if (suf == "b")
+            return (long) Math.Round(num);
+        else if (suf == "k")
+            return (long) Math.Round(num * 1_000);
+        else if (suf == "m")
+            return (long) Math.Round(num * 1_000_000);
+        else if (suf == "g" || suf == null)
+            return (long) Math.Round(num * 1_000_000_000);
+        else if (suf == "t")
+            return (long) Math.Round(num * 1_000_000_000_000);
+        else if (suf == "ki")
+            return (long) Math.Round(num * 1024);
+        else if (suf == "mi")
+            return (long) Math.Round(num * 1024 * 1024);
+        else if (suf == "gi")
+            return (long) Math.Round(num * 1024 * 1024 * 1024);
+        else if (suf == "ti")
+            return (long) Math.Round(num * 1024 * 1024 * 1024 * 1024);
+        else
+            throw new CommandLineValidationException(RhoML.Parse($$"""The suffix "{h}{{suf}}{}" in option {option}--write{} {h}{{size}}{} is not recognized."""));
     }
 
     private static void PostBuildCheck(IPostBuildReporter rep)
@@ -44,7 +77,7 @@ class CommandLine : ICommandLineValidatable
     }
 }
 
-static class Program
+static partial class Program
 {
     static ConsoleLogger Log;
     static CommandLine Args;
@@ -105,16 +138,22 @@ static class Program
         {
             using var stream = new FileStream(Args.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
             byte[] data = new byte[32768];
-            long length = Args.WriteSizeBytes;
-            long remaining = length;
-            long remainingAtMsg = -1;
+            var path = Path.GetDirectoryName(Args.FileName);
+            long remaining = Args.WriteFill ? GetFreeSpace(path) : Args.WriteSizeBytes;
+            long lastUpdateAt = -1;
             int progress = 0;
             Ut.Tic();
-            while (remaining > 0)
+            while (remaining > 0 || Args.WriteFill)
             {
                 rnd.NextBytes(data);
-                int chunk = (int) Math.Min(remaining, data.Length);
-                stream.Write(data, 0, chunk);
+                int chunk = Args.WriteFill ? data.Length : (int) Math.Min(remaining, data.Length);
+                try { stream.Write(data, 0, chunk); }
+                catch (IOException ex) when ((ex.HResult & 0xFFFF) == 0x27 || (ex.HResult & 0xFFFF) == 0x70)
+                {
+                    fillupDisk(stream, data, chunk);
+                    Log.Info($"  written {stream.Position / 1_000_000:#,0} MB, {100.0:0.00}%. Stopping because disk is full.");
+                    return true;
+                }
                 remaining -= chunk;
                 progress += chunk;
                 if (progress >= 500_000_000)
@@ -124,12 +163,14 @@ static class Program
                     while (speeds.Count > 80) // 20 GB
                         speeds.Dequeue();
                     progress -= 500_000_000;
-                    remainingAtMsg = remaining;
-                    Log.Info($"  written {(length - remaining) / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {(length - remaining) / (double) length * 100.0:0.00}%");
+                    if (Args.WriteFill)
+                        remaining = GetFreeSpace(path);
+                    lastUpdateAt = stream.Position;
+                    Log.Info($"  written {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%");
                 }
             }
-            if (remainingAtMsg != 0)
-                Log.Info($"  written {length / 1_000_000:#,0} MB, {100.0:0.00}%");
+            if (lastUpdateAt != stream.Position)
+                Log.Info($"  written {stream.Position / 1_000_000:#,0} MB, {100.0:0.00}%");
             return true;
         }
         catch (Exception e)
@@ -137,6 +178,23 @@ static class Program
             Log.Error("Could not write to file: " + e.Message);
             Log.Error("");
             return false;
+        }
+    }
+
+    private static void fillupDisk(FileStream stream, byte[] data, int length)
+    {
+        length = length / 512 * 512; // round down to nearest multiple of 512 bytes
+        while (length > 0)
+        {
+            try
+            {
+                stream.Write(data, 0, length);
+                return;
+            }
+            catch (IOException ex) when ((ex.HResult & 0xFFFF) == 0x27 || (ex.HResult & 0xFFFF) == 0x70)
+            {
+                length -= 512;
+            }
         }
     }
 
@@ -235,6 +293,17 @@ static class Program
             set.Remove(worst);
         }
         return set.Average();
+    }
+
+    [LibraryImport("kernel32.dll", SetLastError = true, StringMarshalling = StringMarshalling.Utf16)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static partial bool GetDiskFreeSpaceExW(string lpDirectoryName, out ulong lpFreeBytesAvailable, out ulong lpTotalNumberOfBytes, out ulong lpTotalNumberOfFreeBytes);
+
+    private static long GetFreeSpace(string path)
+    {
+        if (!GetDiskFreeSpaceExW(Path.GetFullPath(path), out var freeBytesAvailable, out var totalNumberOfBytes, out var totalNumberOfFreeBytes))
+            throw new System.ComponentModel.Win32Exception();
+        return (long) freeBytesAvailable;
     }
 }
 
