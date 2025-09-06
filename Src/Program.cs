@@ -1,5 +1,4 @@
 ﻿using System.Runtime.InteropServices;
-using System.Text.RegularExpressions;
 using RT.CommandLine;
 using RT.PostBuild;
 using RT.Util;
@@ -9,82 +8,14 @@ using RT.Util.Streams;
 
 namespace DiskTrip;
 
-[Documentation("Reads, writes and verifies large pseudo-random files in order to confirm error-less filesystem read/write operations.")]
-class CommandLine : ICommandLineValidatable
-{
-    [IsPositional, IsMandatory]
-    [Documentation("The name of the test file to write and/or verify.")]
-    public string FileName = null;
-
-    [Option("-w", "--write")]
-    [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.{n}{}The number may be suffixed with {h}K{}, {h}M{}, {h}G{} (default), {h}T{}, {h}Ki{}, {h}Mi{}, {h}Gi{}, {h}Ti{} or {h}b{} to override the units (case-insensitive).{n}{}A special value of {h}fill{} (or {h}full{} or {h}free{}) specifies that all free space should be consumed.""")]
-    public string WriteSize = null;
-    public long WriteSizeBytes;
-    public bool Write => WriteSize != null;
-    public bool WriteFill => Write && WriteSizeBytes == 0;
-
-    [Option("-d", "--delete")]
-    [DocumentationRhoML("{h}Deletes the test file.{}{n}{}Normally the test file is not deleted regardless of the outcome of the test.")]
-    public bool Delete = false;
-
-    [Option("-o", "--overwrite")]
-    [DocumentationRhoML("{h}Allows overwriting the test file if it already exists.{}{n}{}Normally DiskTrip exits with an error code if the test file already exists.")]
-    public bool Overwrite = false;
-
-    public ConsoleColoredString Validate()
-    {
-        WriteSizeBytes = WriteSize == null ? 0 : parseSize(WriteSize);
-        if (!Write && Overwrite)
-            return CommandLineParser.Colorize(RhoML.Parse($$"""Option {option}--overwrite{} has no effect unless {option}--write{} is also specified."""));
-        FileName = Path.GetFullPath(FileName);
-        return null;
-    }
-
-    private long parseSize(string size)
-    {
-        size = size.Trim().ToLowerInvariant();
-        if (size == "fill" || size == "full" || size == "free")
-            return 0;
-        var parsed = Regex.Match(size, @"^(?<num>\d+([,\.]\d*)?)(?<suf>\w+)?$");
-        if (!parsed.Success || !double.TryParse(parsed.Groups["num"].Value, out var num))
-            throw new CommandLineValidationException(RhoML.Parse($$"""The format of option {option}--write{} {h}{{size}}{} is not recognized."""));
-        var suf = parsed.Groups["suf"].Success ? parsed.Groups["suf"].Value : null;
-        if (suf == "b")
-            return (long) Math.Round(num);
-        else if (suf == "k")
-            return (long) Math.Round(num * 1_000);
-        else if (suf == "m")
-            return (long) Math.Round(num * 1_000_000);
-        else if (suf == "g" || suf == null)
-            return (long) Math.Round(num * 1_000_000_000);
-        else if (suf == "t")
-            return (long) Math.Round(num * 1_000_000_000_000);
-        else if (suf == "ki")
-            return (long) Math.Round(num * 1024);
-        else if (suf == "mi")
-            return (long) Math.Round(num * 1024 * 1024);
-        else if (suf == "gi")
-            return (long) Math.Round(num * 1024 * 1024 * 1024);
-        else if (suf == "ti")
-            return (long) Math.Round(num * 1024 * 1024 * 1024 * 1024);
-        else
-            throw new CommandLineValidationException(RhoML.Parse($$"""The suffix "{h}{{suf}}{}" in option {option}--write{} {h}{{size}}{} is not recognized."""));
-    }
-
-    private static void PostBuildCheck(IPostBuildReporter rep)
-    {
-        CommandLineParser.PostBuildStep<CommandLine>(rep);
-    }
-}
-
 static partial class Program
 {
+    static CommandLine Args;
+    static ConsoleLogger Log;
+
     const int PROGRESS_INTERVAL = 500_000_000;
     const int SPEED_SAMPLES = 40;
     const int FILE_BUFFER_SIZE = 256 * 1024;
-
-    static ConsoleLogger Log;
-    static CommandLine Args;
 
     static int Main(string[] args)
     {
@@ -314,37 +245,5 @@ static partial class Program
         if (!GetDiskFreeSpaceExW(Path.GetFullPath(path), out var freeBytesAvailable, out var totalNumberOfBytes, out var totalNumberOfFreeBytes))
             throw new System.ComponentModel.Win32Exception();
         return (long) freeBytesAvailable;
-    }
-}
-
-sealed class RandomXorshift
-{
-    private ulong _x = 123456789;
-    private ulong _y = 362436069;
-    private ulong _z = 521288629;
-    private ulong _w = 88675123;
-
-    public unsafe void NextBytes(byte[] buf)
-    {
-        if (buf.Length % 32 != 0)
-            throw new ArgumentException("The buffer length must be a multiple of 32.", nameof(buf));
-        ulong x = _x, y = _y, z = _z, w = _w;
-        fixed (byte* pbytes = buf)
-        {
-            ulong* pbuf = (ulong*) pbytes;
-            ulong* pend = (ulong*) (pbytes + buf.Length);
-            while (pbuf < pend)
-            {
-                ulong tx = x ^ (x << 11);
-                ulong ty = y ^ (y << 11);
-                ulong tz = z ^ (z << 11);
-                ulong tw = w ^ (w << 11);
-                *(pbuf++) = x = w ^ (w >> 19) ^ (tx ^ (tx >> 8));
-                *(pbuf++) = y = x ^ (x >> 19) ^ (ty ^ (ty >> 8));
-                *(pbuf++) = z = y ^ (y >> 19) ^ (tz ^ (tz >> 8));
-                *(pbuf++) = w = z ^ (z >> 19) ^ (tw ^ (tw >> 8));
-            }
-        }
-        _x = x; _y = y; _z = z; _w = w;
     }
 }
