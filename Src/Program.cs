@@ -79,6 +79,10 @@ class CommandLine : ICommandLineValidatable
 
 static partial class Program
 {
+    const int PROGRESS_INTERVAL = 500_000_000;
+    const int SPEED_SAMPLES = 40;
+    const int FILE_BUFFER_SIZE = 256 * 1024;
+
     static ConsoleLogger Log;
     static CommandLine Args;
 
@@ -137,7 +141,7 @@ static partial class Program
         try
         {
             using var stream = new FileStream(Args.FileName, FileMode.Create, FileAccess.Write, FileShare.Read);
-            byte[] data = new byte[256 * 1024];
+            byte[] data = new byte[FILE_BUFFER_SIZE];
             var path = Path.GetDirectoryName(Args.FileName);
             long remaining = Args.WriteFill ? GetFreeSpace(path) : Args.WriteSizeBytes;
             long lastProgressAt = -1;
@@ -155,7 +159,7 @@ static partial class Program
                     return true;
                 }
                 remaining -= blockLength;
-                if (stream.Position / 500_000_000 != (stream.Position - blockLength) / 500_000_000)
+                if (stream.Position / PROGRESS_INTERVAL != (stream.Position - blockLength) / PROGRESS_INTERVAL)
                 {
                     if (Args.WriteFill)
                         remaining = GetFreeSpace(path);
@@ -171,7 +175,7 @@ static partial class Program
                     return;
                 double speed = (stream.Position - lastProgressAt) / Ut.Tic();
                 speeds.Enqueue(speed);
-                while (speeds.Count > 40) // 20 GB
+                while (speeds.Count > SPEED_SAMPLES) // 20 GB
                     speeds.Dequeue();
                 lastProgressAt = stream.Position;
                 Log.Info($"  written {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%");
@@ -208,8 +212,8 @@ static partial class Program
         using var stream = new FileStream(Args.FileName, FileMode.Open, FileAccess.Read, FileShare.Read);
         var rnd = new RandomXorshift();
         var speeds = new Queue<double>();
-        byte[] data = new byte[256 * 1024];
-        byte[] read = new byte[256 * 1024];
+        byte[] data = new byte[FILE_BUFFER_SIZE];
+        byte[] read = new byte[FILE_BUFFER_SIZE];
         long remaining = stream.Length;
         long lastProgressAt = -1;
         int errors = 0;
@@ -243,7 +247,7 @@ static partial class Program
                     goto equal;
 
                     notequal:;
-                    // Compare the whole block again the slow way since it's by far the easiest way to find the different bytes and add the correct offests to the error signature
+                    // Compare the whole block again the slow way since it's by far the easiest way to find the different bytes and add the correct offsets to the error signature
                     for (int i = 0; i < blockLength; i++)
                         if (data[i] != read[i])
                         {
@@ -267,7 +271,7 @@ static partial class Program
                 }
             }
 
-            if (stream.Position / 500_000_000 != (stream.Position - blockLength) / 500_000_000)
+            if (stream.Position / PROGRESS_INTERVAL != (stream.Position - blockLength) / PROGRESS_INTERVAL)
                 printProgress();
         }
         printProgress();
@@ -280,7 +284,7 @@ static partial class Program
                 return;
             double speed = (stream.Position - lastProgressAt) / Ut.Tic();
             speeds.Enqueue(speed);
-            while (speeds.Count > 40) // 20 GB
+            while (speeds.Count > SPEED_SAMPLES) // 20 GB
                 speeds.Dequeue();
             lastProgressAt = stream.Position;
             Log.Info($"  verified {stream.Position / 1_000_000:#,0} MB @ {speed / 1_000_000:#,0} MB/s ({averageSpeed(speeds) / 1_000_000:#,0} MB/s average), {stream.Position / (double) (stream.Position + remaining) * 100.0:0.00}%, errors: {errors:#,0}, signature: {signature.CRC:X8}");
