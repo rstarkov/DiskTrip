@@ -6,7 +6,10 @@ using RT.Util.Consoles;
 
 namespace DiskTrip;
 
-[Documentation("Reads, writes and verifies large pseudo-random files in order to confirm error-less filesystem read/write operations.")]
+[DocumentationRhoML("""
+    {h}DiskTrip vDEV{}
+    Reads, writes and verifies large pseudo-random files in order to confirm error-less filesystem read/write operations.
+    """)]
 class CommandLine : ICommandLineValidatable
 {
     [IsPositional, IsMandatory]
@@ -14,18 +17,29 @@ class CommandLine : ICommandLineValidatable
     public string FileName = null;
 
     [Option("-w", "--write")]
-    [DocumentationRhoML($$"""{h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}{n}{}When omitted, DiskTrip will verify the previously-created test file.{n}{}The number may be suffixed with {h}K{}, {h}M{}, {h}G{} (default), {h}T{}, {h}Ki{}, {h}Mi{}, {h}Gi{}, {h}Ti{} or {h}b{} to override the units (case-insensitive).{n}{}A special value of {h}fill{} (or {h}full{} or {h}free{}) specifies that all free space should be consumed.""")]
+    [DocumentationRhoML($$"""
+        {h}Writes a test file {field}{{nameof(WriteSize)}}{} MB long (millions of bytes), then reads and verifies it.{}
+        When omitted, DiskTrip will verify the previously-created test file.
+        The number may be suffixed with {h}K{}, {h}M{}, {h}G{} (default), {h}T{}, {h}Ki{}, {h}Mi{}, {h}Gi{}, {h}Ti{} or {h}b{} to override the units (case-insensitive).
+        A special value of {h}fill{} (or {h}full{} or {h}free{}) specifies that all free space should be consumed.
+        """)]
     public string WriteSize = null;
     public long WriteSizeBytes;
     public bool Write => WriteSize != null;
     public bool WriteFill => Write && WriteSizeBytes == 0;
 
     [Option("-d", "--delete")]
-    [DocumentationRhoML("{h}Deletes the test file.{}{n}{}Normally the test file is not deleted regardless of the outcome of the test.")]
+    [DocumentationRhoML("""
+        {h}Deletes the test file.{}
+        Normally the test file is not deleted regardless of the outcome of the test.
+        """)]
     public bool Delete = false;
 
     [Option("-o", "--overwrite")]
-    [DocumentationRhoML("{h}Allows overwriting the test file if it already exists.{}{n}{}Normally DiskTrip exits with an error code if the test file already exists.")]
+    [DocumentationRhoML("""
+        {h}Allows overwriting the test file if it already exists.{}
+        Normally DiskTrip exits with an error code if the test file already exists.
+        """)]
     public bool Overwrite = false;
 
     public ConsoleColoredString Validate()
